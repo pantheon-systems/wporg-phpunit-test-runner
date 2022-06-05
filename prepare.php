@@ -16,6 +16,9 @@ $WPT_SSH_OPTIONS = getenv( 'WPT_SSH_OPTIONS' ) ? : '-o StrictHostKeyChecking=no'
 $WPT_TEST_DIR = getenv( 'WPT_TEST_DIR' );
 $WPT_PHP_EXECUTABLE = getenv( 'WPT_PHP_EXECUTABLE' ) ? : 'php';
 $WPT_DEBUG = getenv( 'WPT_DEBUG' );
+$TERMINUS_MACHINE_TOKEN = getenv( 'TERMINUS_MACHINE_TOKEN' );
+$PANTHEON_SITE_NAME = getenv( 'PANTHEON_SITE_NAME' );
+$PANTHEON_SITE_ENV = getenv( 'PANTHEON_SITE_ENV' );
 
 // Set the ssh private key if it's set.
 $WPT_SSH_PRIVATE_KEY_BASE64 = getenv( 'WPT_SSH_PRIVATE_KEY_BASE64' );
@@ -31,8 +34,8 @@ if ( ! empty( $WPT_SSH_PRIVATE_KEY_BASE64 ) ) {
 		'curl -L https://github.com/pantheon-systems/terminus/releases/download/latest/terminus.phar --output terminus',
 		'chmod +x terminus',
 		'./terminus self:update',
-		'./terminus auth:login --machine-token=' . getenv( 'TERMINUS_MACHINE_TOKEN'),
-		'./terminus wp ' . getenv( 'PANTHEON_SITE_NAME' ) . '.' . getenv( 'PANTHEON_SITE_ENV' ) . ' -- cli info',
+		'./terminus auth:login --machine-token=' . $TERMINUS_MACHINE_TOKEN,
+		'./terminus wp ' . $PANTHEON_SITE_NAME . '.' . $PANTHEON_SITE_ENV . ' -- cli info',
 	) );
 }
 
