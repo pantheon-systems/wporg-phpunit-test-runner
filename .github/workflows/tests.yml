@@ -20,6 +20,9 @@ on:
      # - cron:  '0 0 * * *'
      # Every 30 minutes.
      # - cron:  '0/30 * * * *'
+  push:
+    branches:    
+      - 'master'
 
 # Cancels all previous workflow runs for pull requests that have not completed.
 concurrency:
