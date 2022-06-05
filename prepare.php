@@ -33,7 +33,7 @@ if ( ! empty( $WPT_SSH_PRIVATE_KEY_BASE64 ) ) {
 		'mkdir -p ~/terminus && cd ~/terminus',
 		'curl -L https://github.com/pantheon-systems/terminus/releases/download/latest/terminus.phar --output terminus',
 		'chmod +x terminus',
-		'./terminus self:update',
+		'pwd',
 		'./terminus auth:login --machine-token=' . $TERMINUS_MACHINE_TOKEN,
 		'./terminus wp ' . $PANTHEON_SITE_NAME . '.' . $PANTHEON_SITE_ENV . ' -- cli info',
 	) );
