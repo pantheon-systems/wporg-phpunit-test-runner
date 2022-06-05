@@ -34,8 +34,8 @@ if ( ! empty( $WPT_SSH_PRIVATE_KEY_BASE64 ) ) {
 		'chmod +x terminus',
 		'pwd',
 		'ls -al',
-		'./terminus auth:login --machine-token=' . $TERMINUS_MACHINE_TOKEN,
-		'./terminus wp ' . $PANTHEON_SITE_NAME . '.' . $PANTHEON_SITE_ENV . ' -- cli info',
+		'terminus auth:login --machine-token=' . $TERMINUS_MACHINE_TOKEN,
+		'terminus wp ' . $PANTHEON_SITE_NAME . '.' . $PANTHEON_SITE_ENV . ' -- cli info',
 	) );
 }
 
