@@ -36,7 +36,7 @@ if ( ! empty( $WPT_SSH_PRIVATE_KEY_BASE64 ) ) {
 		'ls -al',
 		'sudo ln -s /home/runner/work/wporg-phpunit-test-runner/wporg-phpunit-test-runner/terminus /usr/local/bin/terminus',
 		'ls -al /usr/local/bin/',
-		'terminus auth:login --machine-token=' . $TERMINUS_MACHINE_TOKEN,
+		'terminus -vvv auth:login --machine-token=' . $TERMINUS_MACHINE_TOKEN,
 		'terminus wp ' . $PANTHEON_SITE_NAME . '.' . $PANTHEON_SITE_ENV . ' -- cli info',
 	) );
 }
