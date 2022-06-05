@@ -32,7 +32,7 @@ if ( ! empty( $WPT_SSH_PRIVATE_KEY_BASE64 ) ) {
 		'chmod +x terminus',
 		'./terminus self:update',
 		'./terminus auth:login --machine-token=' . getenv( 'TERMINUS_MACHINE_TOKEN'),
-		'./terminus wp ' . getenv( 'PANTHEON_SITE_NAME') . '.' getenv( 'PANTHEON_SITE_ENV' ) . ' -- cli info',
+		'./terminus wp ' . getenv( 'PANTHEON_SITE_NAME' ) . '.' . getenv( 'PANTHEON_SITE_ENV' ) . ' -- cli info',
 	) );
 }
 
