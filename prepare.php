@@ -33,6 +33,7 @@ if ( ! empty( $WPT_SSH_PRIVATE_KEY_BASE64 ) ) {
 		'curl -L https://github.com/pantheon-systems/terminus/releases/download/latest/terminus.phar --output terminus',
 		'chmod +x terminus',
 		'pwd',
+		'ls -al',
 		'ln -s /home/runner/work/wporg-phpunit-test-runner/wporg-phpunit-test-runner/terminus /usr/local/bin/terminus',
 		'ls -al /usr/local/bin/',
 		'terminus auth:login --machine-token=' . $TERMINUS_MACHINE_TOKEN,
