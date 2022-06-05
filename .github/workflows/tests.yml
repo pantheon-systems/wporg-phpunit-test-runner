@@ -61,6 +61,10 @@ jobs:
       # SSH settings for connecting to the test environment.
       WPT_SSH_CONNECT: ${{ secrets.WPT_SSH_CONNECT }}
       WPT_SSH_PRIVATE_KEY_BASE64: ${{ secrets.WPT_SSH_PRIVATE_KEY_BASE64 }}
+      # Pantheon-specific variables
+      PANTHEON_SITE_NAME: ${{ secrets.PANTHEON_SITE_NAME }}
+      PANTHEON_SITE_ENV: ${{ secrets.PANTHEON_SITE_ENV }}
+      TERMINUS_MACHINE_TOKEN: ${{ secrets.TERMINUS_MACHINE_TOKEN }}
 
     steps:
       - name: Checkout repository
