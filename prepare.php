@@ -107,9 +107,8 @@ file_put_contents( $WPT_PREPARE_DIR . '/wp-tests-config.php', $contents );
 
 // Now, install PHPUnit based on the test environment's PHP Version
 $php_version_cmd = $WPT_PHP_EXECUTABLE . " -r \"print PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION . '.' . PHP_RELEASE_VERSION;\"";
-log_message( $php_version_cmd );
 if ( ! empty( $WPT_SSH_CONNECT ) ) {
-	$php_version_cmd = 'ssh ' . $WPT_SSH_OPTIONS . ' ' . escapeshellarg( $WPT_SSH_CONNECT ) . ' ' . escapeshellarg( $php_version_cmd );
+	$php_version_cmd = 'ssh ' . escapeshellarg( $WPT_SSH_CONNECT ) . ' ' . escapeshellarg( $php_version_cmd );
 }
 
 $retval = 0;
