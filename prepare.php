@@ -30,13 +30,6 @@ if ( ! empty( $WPT_SSH_PRIVATE_KEY_BASE64 ) ) {
 	file_put_contents( getenv( 'HOME' ) . '/.ssh/id_rsa', base64_decode( $WPT_SSH_PRIVATE_KEY_BASE64 ) );
 	perform_operations( array(
 		'chmod 600 ~/.ssh/id_rsa',
-		'curl -L https://github.com/pantheon-systems/terminus/releases/download/latest/terminus.phar --output terminus',
-		'chmod +x terminus',
-		'pwd',
-		'ls -al',
-		'sudo ln -s /home/runner/work/wporg-phpunit-test-runner/wporg-phpunit-test-runner/terminus /usr/local/bin/terminus',
-		'ls -al /usr/local/bin/',
-		'terminus -vvv auth:login --machine-token=' . $TERMINUS_MACHINE_TOKEN,
 		'terminus wp ' . $PANTHEON_SITE_NAME . '.' . $PANTHEON_SITE_ENV . ' -- cli info',
 	) );
 }
