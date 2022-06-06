@@ -75,6 +75,11 @@ jobs:
         with:
           php-version: '7.4'
           coverage: none
+          
+      - name: Install Terminus
+        uses: pantheon-systems/terminus-github-actions@main
+        with:
+          pantheon-machine-token: ${{ secrets.PANTHEON_MACHINE_TOKEN }}
 
       - name: Install NodeJS
         uses: actions/setup-node@25316bbc1f10ac9d8798711f44914b1cf3c4e954 # v2.4.0
