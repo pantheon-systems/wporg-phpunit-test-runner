@@ -64,6 +64,7 @@ jobs:
       # Pantheon-specific variables
       PANTHEON_SITE_NAME: ${{ secrets.PANTHEON_SITE_NAME }}
       PANTHEON_SITE_ENV: ${{ secrets.PANTHEON_SITE_ENV }}
+      PANTHEON_SITE_UUID: ${{ secrets.PANTHEON_SITE_UUID }}
       TERMINUS_MACHINE_TOKEN: ${{ secrets.TERMINUS_MACHINE_TOKEN }}
 
     steps:
@@ -73,6 +74,11 @@ jobs:
           key: ${{ secrets.PANTHEON_SSH_KEY }}
           config: ${{ secrets.SSH_CONFIG }}
           known_hosts: ${{ secrets.KNOWN_HOSTS }}
+
+      - name: Setup known hosts
+        run: |
+          ssh-keyscan -t rsa -p 2222 "appserver.dev.${PANTHEON_SITE_UUID}.drush.in" >> ~/.ssh/known_hosts
+          ssh-keyscan -t rsa -p 2222 "codeserver.dev.${PANTHEON_SITE_UUID}.drush.in" >> ~/.ssh/known_hosts
           
       - name: Checkout repository
         uses: actions/checkout@5a4ac9002d0be2fb38bd78e4b4dbde5606d7042f # v2.3.4
