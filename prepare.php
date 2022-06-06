@@ -30,12 +30,12 @@ if ( ! empty( $WPT_SSH_PRIVATE_KEY_BASE64 ) ) {
 	file_put_contents( getenv( 'HOME' ) . '/.ssh/id_rsa', base64_decode( $WPT_SSH_PRIVATE_KEY_BASE64 ) );
 	perform_operations( array(
 		'chmod 600 ~/.ssh/id_rsa',
-		'terminus wp ' . $PANTHEON_SITE_NAME . '.' . $PANTHEON_SITE_ENV . ' -- cli info',
 	) );
 }
 
 // Create the preparation directory and fetch corresponding files
 perform_operations( array(
+	'terminus wp ' . $PANTHEON_SITE_NAME . '.' . $PANTHEON_SITE_ENV . ' -- cli info',
 	'mkdir -p ' . escapeshellarg( $WPT_PREPARE_DIR ),
 	'git clone --depth=1 https://github.com/WordPress/wordpress-develop.git ' . escapeshellarg( $WPT_PREPARE_DIR ),
 	'wget -O ' . escapeshellarg( $WPT_PREPARE_DIR . '/tests/phpunit/data/plugins/wordpress-importer.zip' ) . ' https://downloads.wordpress.org/plugin/wordpress-importer.zip',
