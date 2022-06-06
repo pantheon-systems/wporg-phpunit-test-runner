@@ -20,19 +20,6 @@ $TERMINUS_MACHINE_TOKEN = getenv( 'TERMINUS_MACHINE_TOKEN' );
 $PANTHEON_SITE_NAME = getenv( 'PANTHEON_SITE_NAME' );
 $PANTHEON_SITE_ENV = getenv( 'PANTHEON_SITE_ENV' );
 
-// Set the ssh private key if it's set.
-$WPT_SSH_PRIVATE_KEY_BASE64 = getenv( 'WPT_SSH_PRIVATE_KEY_BASE64' );
-if ( ! empty( $WPT_SSH_PRIVATE_KEY_BASE64 ) ) {
-	log_message( 'Securely extracting WPT_SSH_PRIVATE_KEY_BASE64 into ~/.ssh/id_rsa' );
-	if ( ! is_dir( getenv( 'HOME' ) . '/.ssh' ) ) {
-		mkdir( getenv( 'HOME' ) . '/.ssh', 0777, true );
-	}
-	file_put_contents( getenv( 'HOME' ) . '/.ssh/id_rsa', base64_decode( $WPT_SSH_PRIVATE_KEY_BASE64 ) );
-	perform_operations( array(
-		'chmod 600 ~/.ssh/id_rsa',
-	) );
-}
-
 // Create the preparation directory and fetch corresponding files
 perform_operations( array(
 	'terminus wp ' . $PANTHEON_SITE_NAME . '.' . $PANTHEON_SITE_ENV . ' -- cli info',
