@@ -23,8 +23,6 @@ $PANTHEON_SITE_ENV = getenv( 'PANTHEON_SITE_ENV' );
 // Create the preparation directory and fetch corresponding files
 perform_operations( array(
 	'terminus wp ' . $PANTHEON_SITE_NAME . '.' . $PANTHEON_SITE_ENV . ' -- cli info',
-	'pwd',
-	'echo mkdir -p ' . escapeshellarg( $WPT_PREPARE_DIR ),
 	'mkdir -p ' . escapeshellarg( $WPT_PREPARE_DIR ),
 	'git clone --depth=1 https://github.com/WordPress/wordpress-develop.git ' . escapeshellarg( $WPT_PREPARE_DIR ),
 	'wget -O ' . escapeshellarg( $WPT_PREPARE_DIR . '/tests/phpunit/data/plugins/wordpress-importer.zip' ) . ' https://downloads.wordpress.org/plugin/wordpress-importer.zip',
@@ -109,6 +107,7 @@ file_put_contents( $WPT_PREPARE_DIR . '/wp-tests-config.php', $contents );
 
 // Now, install PHPUnit based on the test environment's PHP Version
 $php_version_cmd = $WPT_PHP_EXECUTABLE . " -r \"print PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION . '.' . PHP_RELEASE_VERSION;\"";
+log_message( $php_version_cmd );
 if ( ! empty( $WPT_SSH_CONNECT ) ) {
 	$php_version_cmd = 'ssh ' . $WPT_SSH_OPTIONS . ' ' . escapeshellarg( $WPT_SSH_CONNECT ) . ' ' . escapeshellarg( $php_version_cmd );
 }
