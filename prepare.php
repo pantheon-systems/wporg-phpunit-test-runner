@@ -23,6 +23,8 @@ $PANTHEON_SITE_ENV = getenv( 'PANTHEON_SITE_ENV' );
 // Create the preparation directory and fetch corresponding files
 perform_operations( array(
 	'terminus wp ' . $PANTHEON_SITE_NAME . '.' . $PANTHEON_SITE_ENV . ' -- cli info',
+	'pwd',
+	'echo mkdir -p ' . escapeshellarg( $WPT_PREPARE_DIR ),
 	'mkdir -p ' . escapeshellarg( $WPT_PREPARE_DIR ),
 	'git clone --depth=1 https://github.com/WordPress/wordpress-develop.git ' . escapeshellarg( $WPT_PREPARE_DIR ),
 	'wget -O ' . escapeshellarg( $WPT_PREPARE_DIR . '/tests/phpunit/data/plugins/wordpress-importer.zip' ) . ' https://downloads.wordpress.org/plugin/wordpress-importer.zip',
