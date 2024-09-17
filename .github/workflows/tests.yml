@@ -90,6 +90,9 @@ jobs:
         run: |
           terminus art wordpress
           terminus auth:login --machine-token=${{ secrets.TERMINUS_MACHINE_TOKEN }}
+      
+      - name: Check the SSH key token
+        run: echo "${{ secrets.WPT_SSH_PRIVATE_KEY_BASE64 }}" | base64 -d | ssh-keygen -lf -
 
       - name: Prepare environment
         run: php prepare.php
