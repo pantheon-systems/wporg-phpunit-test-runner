@@ -37,6 +37,7 @@ perform_operations( array(
 	'rm -rf ' . escapeshellarg( $WPT_PREPARE_DIR . '/.git' ),
 	'rm -rf ' . escapeshellarg( $WPT_PREPARE_DIR . '/node_modules/.cache' ),
 	'rm -r ' . escapeshellarg( $WPT_PREPARE_DIR ),
+	'terminus env:commit --message="Cleanup test environment" --yes',
 ) );
 
 /**
