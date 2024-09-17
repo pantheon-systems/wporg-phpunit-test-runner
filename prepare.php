@@ -82,6 +82,9 @@ if ( ! empty( $WPT_SSH_PRIVATE_KEY_BASE64 ) ) {
 	file_put_contents( getenv( 'HOME' ) . '/.ssh/id_rsa', base64_decode( $WPT_SSH_PRIVATE_KEY_BASE64 ) );
 	perform_operations( array(
 		'chmod 600 ~/.ssh/id_rsa',
+        'echo "Host *.drush.in HostKeyAlgorithms +ssh-rsa" >> ~/.ssh/config',
+        'echo "Host *.drush.in PubkeyAcceptedKeyTypes +ssh-rsa" >> ~/.ssh/config',
+        'echo "StrictHostKeyChecking no" >> ~/.ssh/config',
 		'terminus wp ' . $PANTHEON_SITE_NAME . '.' . $PANTHEON_SITE_ENV . ' -- cli info',
 	) );
 }
