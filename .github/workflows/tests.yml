@@ -78,6 +78,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+      
+      - name: Install Terminus
+        uses: pantheon-systems/terminus-github-actions@v1
+        with:
+          terminus-machine-token: ${{ secrets.TERMINUS_MACHINE_TOKEN }}
+
+      - name: Test Terminus
+        run: terminus art wp
 
       - name: Prepare environment
         run: php prepare.php
