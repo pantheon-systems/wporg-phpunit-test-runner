@@ -86,8 +86,10 @@ jobs:
         with:
           terminus-machine-token: ${{ secrets.TERMINUS_MACHINE_TOKEN }}
 
-      - name: Test Terminus
-        run: terminus art wordpress
+      - name: Authenticate Terminus
+        run: |
+          terminus art wordpress
+          terminus auth:login --machine-token=${{ secrets.TERMINUS_MACHINE_TOKEN }}
 
       - name: Prepare environment
         run: php prepare.php
