@@ -86,6 +86,7 @@ if ( ! empty( $WPT_SSH_PRIVATE_KEY_BASE64 ) ) {
         'echo "Host *.drush.in PubkeyAcceptedKeyTypes +ssh-rsa" >> ~/.ssh/config',
         'echo "StrictHostKeyChecking no" >> ~/.ssh/config',
 		'terminus wp ' . $PANTHEON_SITE_NAME . '.' . $PANTHEON_SITE_ENV . ' -- cli info',
+		'terminus connection:set sftp',
 	) );
 }
 
