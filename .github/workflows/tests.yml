@@ -69,16 +69,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+        uses: actions/checkout@v4
 
       - name: Set up PHP
-        uses: shivammathur/setup-php@c5fc0d8281aba02c7fda07d3a70cc5371548067d # v2.25.2
+        uses: shivammathur/setup-php@v2
         with:
           php-version: '7.4'
           coverage: none
 
       - name: Install NodeJS
-        uses: actions/setup-node@64ed1c7eab4cce3362f8c340dee64e5eaeef8f7c # v3.6.0
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
