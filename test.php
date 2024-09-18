@@ -9,6 +9,15 @@
  */
 require __DIR__ . '/functions.php';
 
+// Disable PHP output buffering
+ini_set( 'output_buffering', 'off' );
+ini_set( 'zlib.output_compression', 'off' );
+ini_set( 'implicit_flush', 'on' );
+for ( $i = 0; $i < ob_get_level(); $i++ ) {
+    ob_end_flush();
+}
+ob_implicit_flush( 1 );
+
 /**
  * Check for the presence of required environment variables.
  * This function should be defined in functions.php and should throw an
@@ -71,12 +80,13 @@ unset( $WPT_EXTRATESTS_INI );
  */
 $WPT_PHPUNIT_CMD = trim( getenv( 'WPT_PHPUNIT_CMD' ) );
 if( empty( $WPT_PHPUNIT_CMD ) ) {
-	$WPT_PHPUNIT_CMD = 'cd ' . escapeshellarg( $WPT_TEST_DIR ) . ' && ' . $WPT_PHP_EXECUTABLE . ' ./vendor/phpunit/phpunit/phpunit --dont-report-useless-tests' . $WPT_FLAVOR_TXT . $WPT_EXTRATESTS_TXT;
+	$WPT_PHPUNIT_CMD = 'cd ' . escapeshellarg( $WPT_TEST_DIR ) . ' && ' . $WPT_PHP_EXECUTABLE . ' ./vendor/phpunit/phpunit/phpunit --dont-report-useless-tests --verbose' . $WPT_FLAVOR_TXT . $WPT_EXTRATESTS_TXT;
 }
 
-// If an SSH connection string is provided, prepend the SSH command to the PHPUnit execution command.
+// Adjust SSH command to force TTY and reduce buffering
 if ( ! empty( $WPT_SSH_CONNECT ) ) {
-	$WPT_PHPUNIT_CMD = 'ssh ' . $WPT_SSH_OPTIONS . ' ' . escapeshellarg( $WPT_SSH_CONNECT ) . ' ' . escapeshellarg( $WPT_PHPUNIT_CMD );
+    $WPT_SSH_OPTIONS .= ' -tt -o ServerAliveInterval=30 -o ServerAliveCountMax=5 -o LogLevel=ERROR';
+    $WPT_PHPUNIT_CMD = 'ssh ' . $WPT_SSH_OPTIONS . ' ' . escapeshellarg( $WPT_SSH_CONNECT ) . ' ' . escapeshellarg( $WPT_PHPUNIT_CMD );
 }
 
 // Execute the PHPUnit command.
