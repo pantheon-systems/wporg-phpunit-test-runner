@@ -1,104 +1,136 @@
 name: WordPress PHPUnit tests
 
 on:
-  # The workflow should be run on a schedule using the 'schedule' event trigger.
-  #
-  # For more details on how to configure the schedule event, see https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#onschedule.
-  #
-  # Below are some options for different schedules. Running the tests every hour is recommended,
-  # but every 3-6 hours is also helpful. Times are in UTC.
-   schedule:
-     # By default, the workflow will run every hour.
-     - cron:  '0 * * * *'
-     # Every 3 hours.
-     # - cron:  '0 0/3 * * *'
-     # Every 6 hours.
-     # - cron:  '0 0/6 * * *'
-     # Every 12 hours.
-     # - cron:  '0 0/12 * * *'
-     # Once per day at 00:00.
-     # - cron:  '0 0 * * *'
-     # Every 30 minutes.
-     # - cron:  '0/30 * * * *'
-   push:
+  schedule:
+    # By default, the workflow will run every hour.
+    - cron: '0 * * * *'
+    # Every 3 hours.
+    # - cron:  '0 0/3 * * *'
+    # Every 6 hours.
+    # - cron:  '0 0/6 * * *'
+    # Every 12 hours.
+    # - cron:  '0 0/12 * * *'
+    # Once per day at 00:00.
+    # - cron:  '0 0 * * *'
+  push:
     branches:
       - main
-   workflow_dispatch:
-     inputs:
-       test_group:
-         description: 'Run only tests in this @group. Defaults to full suite.'
-         required: false
-         default: ''
-         type: choice
-         options:
-           - ''
-           - actions
-           - canonical
-           - comment
-           - cron
-           - db
-           - feed
-           - filters
-           - formatting
-           - http
-           - image
-           - l10n
-           - media
-           - ms-site
-           - option
-           - post
-           - query
-           - rest-api
-           - rewrite
-           - taxonomy
-           - themes
-           - upload
-           - user
-           - utf8
-       test_filter:
-         description: 'PHPUnit --filter pattern — matches against class and method names. Examples: Tests_DB, Tests_Options, Tests_Post_Types::test_register. Overrides test_group if set.'
-         required: false
-         default: ''
-
-# Only one run at a time — prevents simultaneous runs from conflicting
-# over the same wptests_* tables on the shared Pantheon environment.
-concurrency:
-  group: ${{ github.workflow }}
-  cancel-in-progress: true
+  workflow_dispatch:
+    inputs:
+      php_version:
+        description: 'PHP version to test. Defaults to all supported Pantheon PHP versions.'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - '8.5'
+          - '8.4'
+          - '8.3'
+          - '8.2'
+          - '8.1'
+          - '7.4'
+      db_version:
+        description: 'MariaDB version to test. Defaults to all supported Pantheon MariaDB versions.'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - '10.4'
+          - '10.6'
+      test_group:
+        description: 'Run only tests in this @group. Defaults to full suite.'
+        required: false
+        default: ''
+        type: choice
+        options:
+          - ''
+          - actions
+          - canonical
+          - comment
+          - cron
+          - db
+          - feed
+          - filters
+          - formatting
+          - http
+          - image
+          - l10n
+          - media
+          - ms-site
+          - option
+          - post
+          - query
+          - rest-api
+          - rewrite
+          - taxonomy
+          - themes
+          - upload
+          - user
+          - utf8
+      test_filter:
+        description: 'PHPUnit --filter pattern — matches against class and method names. Examples: Tests_DB, Tests_Options, Tests_Post_Types::test_register. Overrides test_group if set.'
+        required: false
+        default: ''
 
 jobs:
   # Runs the WordPress PHPUnit test suite on the Pantheon environment via Terminus.
   #
+  # Each matrix combination maps to a dedicated Pantheon multidev environment named
+  # php{XY}-db{ZZZ} (e.g. php84-db106), pre-configured with the matching PHP and
+  # MariaDB versions via pantheon.yml. This avoids any dynamic version switching at
+  # runtime and gives each combination a clean, isolated database.
+  #
   # Flow:
-  # 1. Prepare: git clone wordpress-develop locally, rsync to Pantheon, run composer on Pantheon.
+  # 1. Prepare: git clone wordpress-develop on the Pantheon container via Terminus.
   # 2. Test: run PHPUnit on Pantheon via terminus remote:wp eval --skip-wordpress.
-  # 3. Report: rsync results from Pantheon, upload to WordPress.org.
-  # 4. Cleanup: remove test dir on Pantheon and locally.
+  # 3. Report: fetch results from Pantheon, upload to WordPress.org.
+  # 4. Cleanup: remove test dir on Pantheon.
   test:
-    name: Run Core PHPUnit tests
+    name: PHP ${{ matrix.php }} / MariaDB ${{ matrix.db }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
+
+    # Skip matrix combinations not selected via workflow_dispatch inputs.
+    # On schedule/push, inputs are empty so all combinations run.
+    if: |
+      (inputs.php_version == '' || inputs.php_version == 'all' || inputs.php_version == matrix.php) &&
+      (inputs.db_version == '' || inputs.db_version == 'all' || inputs.db_version == matrix.db)
+
+    # One concurrent run per PHP+MariaDB combination — each multidev has its own
+    # database so there's no cross-combination conflict, but we still prevent
+    # duplicate runs for the same combination from piling up.
+    concurrency:
+      group: ${{ github.workflow }}-php${{ matrix.php }}-db${{ matrix.db }}
+      cancel-in-progress: true
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.5', '8.4', '8.3', '8.2', '8.1', '7.4']
+        db: ['10.4', '10.6']
 
     env:
       WPT_PREPARE_DIR: ${{ secrets.WPT_PREPARE_DIR }}
       WPT_TEST_DIR: ${{ secrets.WPT_TEST_DIR }}
       WPT_REPORT_API_KEY: ${{ secrets.WPT_REPORT_API_KEY }}
-      # PHP binary on the Pantheon container — use 'php' so it follows whatever
-      # version the environment is configured to run, without hardcoding a version.
-      WPT_PHP_EXECUTABLE: php
-      # SSH key for Terminus SSH operations (remote:wp, remote:composer).
       WPT_SSH_PRIVATE_KEY_BASE64: ${{ secrets.WPT_SSH_PRIVATE_KEY_BASE64 }}
-      # Pantheon-specific variables.
       PANTHEON_SITE_NAME: ${{ secrets.PANTHEON_SITE_NAME }}
-      PANTHEON_SITE_ENV: ${{ secrets.PANTHEON_SITE_ENV }}
       TERMINUS_MACHINE_TOKEN: ${{ secrets.TERMINUS_MACHINE_TOKEN }}
-      # Optional test scoping — set via workflow_dispatch inputs.
       WPT_TEST_GROUP: ${{ inputs.test_group }}
       WPT_TEST_FILTER: ${{ inputs.test_filter }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set matrix-derived environment variables
+        run: |
+          PHP_SHORT=$(echo "${{ matrix.php }}" | tr -d '.')
+          DB_SHORT=$(echo "${{ matrix.db }}" | tr -d '.')
+          echo "PANTHEON_SITE_ENV=php${PHP_SHORT}-db${DB_SHORT}" >> $GITHUB_ENV
+          echo "WPT_PHP_EXECUTABLE=php${{ matrix.php }}" >> $GITHUB_ENV
 
       - name: Set up PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2.37.2
@@ -123,10 +155,10 @@ jobs:
       - name: Wake and configure Pantheon environment
         run: |
           terminus art wordpress
-          terminus env:wake ${{ secrets.PANTHEON_SITE_NAME }}.${{ secrets.PANTHEON_SITE_ENV }}
+          terminus env:wake ${{ secrets.PANTHEON_SITE_NAME }}.${{ env.PANTHEON_SITE_ENV }}
           terminus site:info ${{ secrets.PANTHEON_SITE_NAME }}
-          terminus env:info ${{ secrets.PANTHEON_SITE_NAME }}.${{ secrets.PANTHEON_SITE_ENV }}
-          terminus connection:set ${{ secrets.PANTHEON_SITE_NAME }}.${{ secrets.PANTHEON_SITE_ENV }} sftp
+          terminus env:info ${{ secrets.PANTHEON_SITE_NAME }}.${{ env.PANTHEON_SITE_ENV }}
+          terminus connection:set ${{ secrets.PANTHEON_SITE_NAME }}.${{ env.PANTHEON_SITE_ENV }} sftp
 
       - name: Prepare environment
         run: php prepare.php
