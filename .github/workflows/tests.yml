@@ -74,6 +74,9 @@ on:
         required: false
         default: ''
 
+permissions:
+  contents: read
+
 jobs:
   # Runs the WordPress PHPUnit test suite on the Pantheon environment via Terminus.
   #
