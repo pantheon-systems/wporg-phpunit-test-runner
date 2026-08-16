@@ -78,6 +78,36 @@ permissions:
   contents: read
 
 jobs:
+  # Resolve the matrix from workflow_dispatch inputs. The `matrix` context is not
+  # available in a job-level `if:`, so filtering has to happen here: this job emits
+  # the PHP and MariaDB lists (full set on schedule/push, or a single value when an
+  # input selects one), and the test job builds its matrix from them via fromJson.
+  setup:
+    name: Resolve matrix
+    runs-on: ubuntu-latest
+    outputs:
+      php: ${{ steps.resolve.outputs.php }}
+      db: ${{ steps.resolve.outputs.db }}
+    steps:
+      - name: Resolve PHP and MariaDB lists
+        id: resolve
+        env:
+          IN_PHP: ${{ inputs.php_version }}
+          IN_DB: ${{ inputs.db_version }}
+        run: |
+          ALL_PHP='["8.5","8.4","8.3","8.2","8.1","7.4"]'
+          ALL_DB='["10.4","10.6"]'
+          if [ -z "$IN_PHP" ] || [ "$IN_PHP" = "all" ]; then
+            echo "php=$ALL_PHP" >> "$GITHUB_OUTPUT"
+          else
+            echo "php=[\"$IN_PHP\"]" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -z "$IN_DB" ] || [ "$IN_DB" = "all" ]; then
+            echo "db=$ALL_DB" >> "$GITHUB_OUTPUT"
+          else
+            echo "db=[\"$IN_DB\"]" >> "$GITHUB_OUTPUT"
+          fi
+
   # Runs the WordPress PHPUnit test suite on the Pantheon environment via Terminus.
   #
   # Each matrix combination maps to a dedicated Pantheon multidev environment named
@@ -92,14 +122,9 @@ jobs:
   # 4. Cleanup: remove test dir on Pantheon.
   test:
     name: PHP ${{ matrix.php }} / MariaDB ${{ matrix.db }}
+    needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 120
-
-    # Skip matrix combinations not selected via workflow_dispatch inputs.
-    # On schedule/push, inputs are empty so all combinations run.
-    if: |
-      (inputs.php_version == '' || inputs.php_version == 'all' || inputs.php_version == matrix.php) &&
-      (inputs.db_version == '' || inputs.db_version == 'all' || inputs.db_version == matrix.db)
 
     # One concurrent run per PHP+MariaDB combination — each multidev has its own
     # database so there's no cross-combination conflict, but we still prevent
@@ -111,8 +136,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ['8.5', '8.4', '8.3', '8.2', '8.1', '7.4']
-        db: ['10.4', '10.6']
+        php: ${{ fromJson(needs.setup.outputs.php) }}
+        db: ${{ fromJson(needs.setup.outputs.db) }}
 
     env:
       WPT_PREPARE_DIR: ${{ secrets.WPT_PREPARE_DIR }}
