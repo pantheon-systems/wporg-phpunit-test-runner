@@ -98,6 +98,9 @@ if ( $summary_file ) {
 	$summary  = "## WordPress PHPUnit Test Results\n\n";
 	$summary .= '| | |' . "\n" . '|---|---|' . "\n";
 	$summary .= '| **Site** | ' . $PANTHEON_SITE_NAME . '.' . $PANTHEON_SITE_ENV . " |\n";
+	if ( ! empty( $env_data['label'] ) ) {
+		$summary .= '| **Label** | ' . $env_data['label'] . " |\n";
+	}
 	$summary .= '| **Revision** | ' . ( $rev ?: 'unknown' ) . " |\n";
 	$summary .= '| **Commit** | ' . ( $message ?: 'unknown' ) . " |\n";
 	$summary .= '| **PHP** | ' . ( $env_data['php_version'] ?? 'unknown' ) . " |\n";

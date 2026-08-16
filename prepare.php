@@ -90,6 +90,11 @@ if ( empty( $sample_b64 ) ) {
 
 $contents = base64_decode( $sample_b64 );
 
+// Environment label reported to WordPress.org so this PHP/MariaDB combination
+// can be distinguished from others reporting under the same account. addslashes()
+// keeps the value safe when interpolated into the single-quoted string below.
+$wpt_label = addslashes( $runner_vars['WPT_LABEL'] );
+
 $system_logger = <<<EOT
 // Create the log directory to store test results
 if ( ! is_dir(  __DIR__ . '/tests/phpunit/build/logs/' ) ) {
@@ -105,6 +110,7 @@ if( extension_loaded( 'imagick' ) ) {
 	\$imagick_info = Imagick::queryFormats();
 }
 \$env = array(
+	'label'          => '$wpt_label',
 	'php_version'    => phpversion(),
 	'php_modules'    => array(),
 	'gd_info'        => \$gd_info,
