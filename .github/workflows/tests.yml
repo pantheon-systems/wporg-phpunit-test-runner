@@ -183,6 +183,20 @@ jobs:
         run: |
           terminus self:plugin:install pantheon-systems/terminus-composer-plugin
 
+      # prepare.php also installs this key, but the Verify step below runs first and
+      # needs 'terminus remote:wp' (SSH) to reach the container — so set it up here.
+      - name: Set up SSH key for Terminus remote commands
+        run: |
+          mkdir -p ~/.ssh
+          echo "$WPT_SSH_PRIVATE_KEY_BASE64" | base64 -d > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          {
+            echo "Host *.drush.in"
+            echo "  HostKeyAlgorithms +ssh-rsa"
+            echo "  PubkeyAcceptedKeyTypes +ssh-rsa"
+            echo "StrictHostKeyChecking no"
+          } >> ~/.ssh/config
+
       - name: Wake and configure Pantheon environment
         run: |
           terminus art wordpress
