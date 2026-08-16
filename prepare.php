@@ -109,13 +109,25 @@ if( extension_loaded( 'gd' ) ) {
 if( extension_loaded( 'imagick' ) ) {
 	\$imagick_info = Imagick::queryFormats();
 }
+// Report the actual database SERVER version (e.g. MariaDB 10.6). 'mysql --version'
+// only reports the client binary, which is uniform across Pantheon containers and
+// would mask the per-environment MariaDB version, so query SELECT VERSION() and
+// fall back to the client string only if the connection fails.
+\$wpt_db_version = trim( shell_exec( 'mysql --version' ) );
+\$wpt_dbh = @new mysqli( getenv( 'DB_HOST' ), getenv( 'DB_USER' ), getenv( 'DB_PASSWORD' ), getenv( 'DB_NAME' ), (int) getenv( 'DB_PORT' ) );
+if ( \$wpt_dbh && ! \$wpt_dbh->connect_errno ) {
+	\$wpt_dbrow = \$wpt_dbh->query( 'SELECT VERSION()' );
+	if ( \$wpt_dbrow ) {
+		\$wpt_db_version = \$wpt_dbrow->fetch_row()[0];
+	}
+}
 \$env = array(
 	'label'          => '$wpt_label',
 	'php_version'    => phpversion(),
 	'php_modules'    => array(),
 	'gd_info'        => \$gd_info,
 	'imagick_info'   => \$imagick_info,
-	'mysql_version'  => trim( shell_exec( 'mysql --version' ) ),
+	'mysql_version'  => \$wpt_db_version,
 	'system_utils'   => array(),
 	'os_name'        => trim( shell_exec( 'uname -s' ) ),
 	'os_version'     => trim( shell_exec( 'uname -r' ) ),
