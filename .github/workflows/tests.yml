@@ -31,13 +31,12 @@ on:
           - '8.1'
           - '7.4'
       db_version:
-        description: 'MariaDB version to test. Defaults to all supported Pantheon MariaDB versions.'
+        description: 'MariaDB version to test. Only 10.6 is provisioned on this site.'
         required: false
         default: 'all'
         type: choice
         options:
           - all
-          - '10.4'
           - '10.6'
       test_group:
         description: 'Run only tests in this @group. Defaults to full suite.'
@@ -96,7 +95,9 @@ jobs:
           IN_DB: ${{ inputs.db_version }}
         run: |
           ALL_PHP='["8.5","8.4","8.3","8.2","8.1","7.4"]'
-          ALL_DB='["10.4","10.6"]'
+          # MariaDB 10.4 is EOL and not provisionable here (the site is already on
+          # 10.6 and Pantheon does not downgrade), so 10.6 is the only real option.
+          ALL_DB='["10.6"]'
           if [ -z "$IN_PHP" ] || [ "$IN_PHP" = "all" ]; then
             echo "php=$ALL_PHP" >> "$GITHUB_OUTPUT"
           else
