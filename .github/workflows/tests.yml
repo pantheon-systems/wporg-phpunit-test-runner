@@ -211,40 +211,11 @@ jobs:
       # and MariaDB SELECT VERSION() so a drifted pantheon.yml can't silently run
       # (and report) the wrong environment to WordPress.org.
       - name: Verify environment versions
-        run: |
-          SITE="${{ secrets.PANTHEON_SITE_NAME }}.${{ env.PANTHEON_SITE_ENV }}"
-          EXPECT_PHP="${{ matrix.php }}"
-          EXPECT_DB="${{ matrix.db }}"
-          # PHP snippet run on the container by terminus; $m/$v are PHP vars, so
-          # single quotes (no shell expansion) are deliberate.
-          # shellcheck disable=SC2016
-          INFO='$m=@new mysqli(getenv("DB_HOST"),getenv("DB_USER"),getenv("DB_PASSWORD"),getenv("DB_NAME"),(int)getenv("DB_PORT")); $v=($m && !$m->connect_errno)?$m->query("SELECT VERSION()")->fetch_row()[0]:"unknown"; echo json_encode(["php"=>PHP_VERSION,"db"=>$v]);'
-          JSON=$(terminus remote:wp "$SITE" -- eval "$INFO" --skip-wordpress --quiet 2>/dev/null)
-          echo "Environment reports: $JSON"
-          ACTUAL_PHP=$(echo "$JSON" | jq -r .php)
-          ACTUAL_DB=$(echo "$JSON" | jq -r .db)
-          ACTUAL_PHP_MM=$(echo "$ACTUAL_PHP" | grep -oE '^[0-9]+\.[0-9]+')
-          ACTUAL_DB_MM=$(echo "$ACTUAL_DB" | grep -oE '[0-9]+\.[0-9]+' | head -1)
-          echo "PHP     — expected ${EXPECT_PHP}, actual ${ACTUAL_PHP}"
-          echo "MariaDB — expected ${EXPECT_DB}, actual ${ACTUAL_DB}"
-          STATUS="✅ match"
-          if [ "$ACTUAL_PHP_MM" != "$EXPECT_PHP" ]; then
-            echo "::error::PHP mismatch on ${PANTHEON_SITE_ENV}: reports ${ACTUAL_PHP}, matrix expects ${EXPECT_PHP}"
-            STATUS="❌ mismatch"
-          fi
-          if [ "$ACTUAL_DB_MM" != "$EXPECT_DB" ]; then
-            echo "::error::MariaDB mismatch on ${PANTHEON_SITE_ENV}: reports ${ACTUAL_DB}, matrix expects ${EXPECT_DB}"
-            STATUS="❌ mismatch"
-          fi
-          {
-            echo "### Environment verification — ${PANTHEON_SITE_ENV} (${STATUS})"
-            echo ""
-            echo "| | Expected | Actual |"
-            echo "|---|---|---|"
-            echo "| PHP | ${EXPECT_PHP} | ${ACTUAL_PHP} |"
-            echo "| MariaDB | ${EXPECT_DB} | ${ACTUAL_DB} |"
-          } >> "$GITHUB_STEP_SUMMARY"
-          [ "$STATUS" = "✅ match" ]
+        env:
+          PANTHEON_SITE: ${{ secrets.PANTHEON_SITE_NAME }}.${{ env.PANTHEON_SITE_ENV }}
+          EXPECT_PHP: ${{ matrix.php }}
+          EXPECT_DB: ${{ matrix.db }}
+        run: .github/scripts/verify-environment.sh
 
       - name: Prepare environment
         run: php prepare.php
