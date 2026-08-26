@@ -70,8 +70,15 @@ $WPT_TEST_GROUP  = trim( getenv( 'WPT_TEST_GROUP' ) );
 // on every Pantheon runtime (BUGS-11823). WordPress core already gates this test
 // off for PHP >= 8.3 (@requires PHP < 8.3, core trac #63932), so excluding it here
 // only affects 7.4/8.1/8.2 — precisely the versions that currently report nothing.
+// test_default_script_module_files_exist asserts that built script-module files
+// exist under wp-includes/js/dist/. Those are npm build artifacts, and prepare.php
+// deliberately skips the JS build (PHP unit tests don't need compiled assets).
+// Pantheon containers have no node/npm, so the build cannot run there either.
+// Without this exclusion we publish a failure to WordPress.org that is caused
+// purely by how this runner provisions the suite.
 $wpt_excluded_tests = array(
 	'test_image_max_bit_depth',
+	'test_default_script_module_files_exist',
 );
 
 $scope_txt = '';
