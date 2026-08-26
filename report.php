@@ -114,7 +114,7 @@ if ( $summary_file ) {
 	$summary .= '| **Revision** | ' . ( $rev ?: 'unknown' ) . " |\n";
 	$summary .= '| **Commit** | ' . ( $message ?: 'unknown' ) . " |\n";
 	$summary .= '| **PHP** | ' . ( $env_data['php_version'] ?? 'unknown' ) . " |\n";
-	$summary .= '| **MySQL** | ' . ( $env_data['mysql_version'] ?? 'unknown' ) . " |\n";
+	$summary .= '| **Database** | ' . ( $env_data['mysql_version'] ?? 'unknown' ) . " |\n";
 	file_put_contents( $summary_file, $summary, FILE_APPEND );
 }
 

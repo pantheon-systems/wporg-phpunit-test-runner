@@ -243,10 +243,12 @@ jobs:
         # Prevent the workflow from stopping if there are test failures.
         continue-on-error: true
 
+      # Deliberately NOT continue-on-error: a failed upload means this combination
+      # contributed nothing to the WordPress.org results, which is exactly the
+      # outcome the workflow status should surface. Test failures are still
+      # tolerated by the step above.
       - name: Report the results
         run: php report.php
-        # Prevent the workflow from stopping if the reporting fails.
-        continue-on-error: true
 
       - name: Cleanup
         run: php cleanup.php

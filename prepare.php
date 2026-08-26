@@ -109,18 +109,27 @@ if( extension_loaded( 'gd' ) ) {
 if( extension_loaded( 'imagick' ) ) {
 	\$imagick_info = Imagick::queryFormats();
 }
-// Report the actual database SERVER version (e.g. '10.6.18-MariaDB-log' or
-// '8.4.3'). 'mysql --version' only reports the client binary, which is uniform
-// across Pantheon containers and would mask the per-environment database version
-// and engine, so query SELECT VERSION() and fall back to the client string only if
-// the connection fails. The server string self-identifies the engine, which is what
-// distinguishes MariaDB from MySQL rows in the WordPress.org db-version taxonomy.
-\$wpt_db_version = trim( shell_exec( 'mysql --version' ) );
+// Report the actual database SERVER version, self-describing for both engines.
+// MariaDB stamps its own name into VERSION() ('10.6.22-MariaDB-ubu2204-log') but
+// MySQL does not ('8.4.10'), which left MySQL rows indistinguishable from a bare
+// version number in the WordPress.org db-version taxonomy. Append
+// @@version_comment when VERSION() doesn't already name the engine, so MySQL
+// reports as '8.4.10 (MySQL Community Server - GPL)' alongside MariaDB's string.
+//
+// 'mysql --version' is deliberately NOT used as a fallback: it reports the client
+// binary (a uniform Percona build on every Pantheon container), so on a failed
+// connection it silently attributes the client's version to the server. Report
+// 'unknown' rather than something actively wrong.
+\$wpt_db_version = 'unknown';
 \$wpt_dbh = @new mysqli( getenv( 'DB_HOST' ), getenv( 'DB_USER' ), getenv( 'DB_PASSWORD' ), getenv( 'DB_NAME' ), (int) getenv( 'DB_PORT' ) );
 if ( \$wpt_dbh && ! \$wpt_dbh->connect_errno ) {
-	\$wpt_dbrow = \$wpt_dbh->query( 'SELECT VERSION()' );
+	\$wpt_dbrow = \$wpt_dbh->query( 'SELECT VERSION(), @@version_comment' );
 	if ( \$wpt_dbrow ) {
-		\$wpt_db_version = \$wpt_dbrow->fetch_row()[0];
+		list( \$wpt_v, \$wpt_comment ) = \$wpt_dbrow->fetch_row();
+		\$wpt_comment = trim( (string) \$wpt_comment );
+		\$wpt_db_version = ( false !== stripos( \$wpt_v, 'mariadb' ) || '' === \$wpt_comment )
+			? \$wpt_v
+			: \$wpt_v . ' (' . \$wpt_comment . ')';
 	}
 }
 \$env = array(
