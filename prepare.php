@@ -229,27 +229,84 @@ perform_operations( array(
 ) );
 
 /**
- * Install the db.php drop-in that reports the real database server version.
+ * Patch wpdb::db_server_info() to report the real database server version.
  *
- * Pantheon's database proxy reports a fixed "5.5.30" in the connection handshake,
- * which is what wpdb::db_version() reads. Without this, version-gated behaviour in
- * core misfires against the real server — see drop-ins/db.php for detail.
+ * Pantheon's database proxy answers the MySQL connection handshake with a fixed
+ * "5.5.30" regardless of the actual server, and drops the "MariaDB" marker.
+ * wpdb::db_server_info() returns that handshake value and wpdb::db_version()
+ * strips it to digits, so WordPress believes every environment is MySQL 5.5.30
+ * whether it is really MariaDB 10.6 or MySQL 8.4. SELECT VERSION() reports the
+ * truth.
  *
- * WP_CONTENT_DIR is ABSPATH . 'wp-content', and wp-tests-config.php sets
- * ABSPATH to <test dir>/src/, so the drop-in belongs at src/wp-content/db.php.
+ * Two concrete consequences in the suite, both from version-gated core code:
+ *   - dbDelta() ignores integer display widths only on MySQL >= 8.0.17
+ *     (wp-admin/includes/upgrade.php), so at 5.5.30 every `bigint(20)` vs
+ *     `bigint` comparison reads as a type change: 27 failures on MySQL 8.4.
+ *   - Tests_DB_Charset gates its expectations on MariaDB >= 10.6.1 /
+ *     MySQL >= 8.0.30, so it expects `utf8` where the server reports `utf8mb3`.
+ *
+ * This is done by patching core rather than by a wp-content/db.php drop-in.
+ * A drop-in has to subclass wpdb, which changes get_class( $wpdb ) and breaks
+ * tests/phpunit/tests/db.php, where `new ReflectionProperty( $wpdb, ... )`
+ * cannot see wpdb's private properties through a subclass. Patching the method
+ * in place keeps $wpdb as exactly wpdb, and WpdbExposedMethodsForTesting (which
+ * extends wpdb) inherits the fix, so the charset tests are corrected too.
+ *
+ * The replacement asserts exactly one match so that an upstream refactor of this
+ * method fails the run loudly instead of silently doing nothing.
  */
-log_message( 'Installing db.php drop-in' );
-$dropin_local = __DIR__ . '/drop-ins/db.php';
-if ( ! file_exists( $dropin_local ) ) {
-	error_message( 'drop-ins/db.php is missing from the runner checkout.' );
-}
-$dropin_b64  = base64_encode( file_get_contents( $dropin_local ) );
-$dropin_path = $test_dir . '/src/wp-content/db.php';
-$dropin_php  = '@mkdir(dirname(' . var_export( $dropin_path, true ) . '), 0777, true); '
-	. 'file_put_contents(' . var_export( $dropin_path, true ) . ', base64_decode(' . var_export( $dropin_b64, true ) . ')); '
-	. 'echo "db.php drop-in written (" . filesize(' . var_export( $dropin_path, true ) . ') . " bytes)\n";';
+log_message( 'Patching wpdb::db_server_info() to report the real server version' );
+
+$wpdb_file = $test_dir . '/src/wp-includes/class-wpdb.php';
+
+$wpdb_search = "\tpublic function db_server_info() {\n"
+	. "\t\treturn mysqli_get_server_info( \$this->dbh );\n"
+	. "\t}";
+
+$wpdb_replace = <<<'PATCH'
+	public function db_server_info() {
+		static $cache = array();
+
+		if ( empty( $this->dbh ) || ! ( $this->dbh instanceof mysqli ) ) {
+			return mysqli_get_server_info( $this->dbh );
+		}
+
+		$key = spl_object_id( $this->dbh );
+		if ( isset( $cache[ $key ] ) ) {
+			return $cache[ $key ];
+		}
+
+		$info   = mysqli_get_server_info( $this->dbh );
+		$result = @mysqli_query( $this->dbh, 'SELECT VERSION()' );
+
+		if ( $result instanceof mysqli_result ) {
+			$row = $result->fetch_row();
+			$result->free();
+			if ( ! empty( $row[0] ) ) {
+				$info = $row[0];
+			}
+		}
+
+		$cache[ $key ] = $info;
+
+		return $info;
+	}
+PATCH;
+
+// Ship the search/replace as base64 so no quoting survives the trip through
+// escapeshellarg() into terminus eval.
+$patch_php = '$f = ' . var_export( $wpdb_file, true ) . '; '
+	. '$s = file_get_contents($f); '
+	. 'if (false === $s) { echo "PATCH_FAIL: cannot read $f\n"; exit(1); } '
+	. '$search = base64_decode(' . var_export( base64_encode( $wpdb_search ), true ) . '); '
+	. '$replace = base64_decode(' . var_export( base64_encode( $wpdb_replace ), true ) . '); '
+	. '$n = substr_count($s, $search); '
+	. 'if (1 !== $n) { echo "PATCH_FAIL: expected 1 match for db_server_info(), found $n\n"; exit(1); } '
+	. 'file_put_contents($f, str_replace($search, $replace, $s)); '
+	. 'echo "Patched wpdb::db_server_info()\n";';
+
 perform_operations( array(
-	'terminus remote:wp ' . $site_env . ' -- eval ' . escapeshellarg( $dropin_php ) . ' --skip-wordpress',
+	'terminus remote:wp ' . $site_env . ' -- eval ' . escapeshellarg( $patch_php ) . ' --skip-wordpress',
 ) );
 
 /**
