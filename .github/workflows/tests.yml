@@ -31,13 +31,14 @@ on:
           - '8.1'
           - '7.4'
       db_version:
-        description: 'MariaDB version to test. Only 10.6 is provisioned on this site.'
+        description: 'Database version to test. 10.6 is MariaDB, 8.4 is MySQL.'
         required: false
         default: 'all'
         type: choice
         options:
           - all
           - '10.6'
+          - '8.4'
       test_group:
         description: 'Run only tests in this @group. Defaults to full suite.'
         required: false
@@ -79,7 +80,7 @@ permissions:
 jobs:
   # Resolve the matrix from workflow_dispatch inputs. The `matrix` context is not
   # available in a job-level `if:`, so filtering has to happen here: this job emits
-  # the PHP and MariaDB lists (full set on schedule/push, or a single value when an
+  # the PHP and database lists (full set on schedule/push, or a single value when an
   # input selects one), and the test job builds its matrix from them via fromJson.
   setup:
     name: Resolve matrix
@@ -88,16 +89,18 @@ jobs:
       php: ${{ steps.resolve.outputs.php }}
       db: ${{ steps.resolve.outputs.db }}
     steps:
-      - name: Resolve PHP and MariaDB lists
+      - name: Resolve PHP and database lists
         id: resolve
         env:
           IN_PHP: ${{ inputs.php_version }}
           IN_DB: ${{ inputs.db_version }}
         run: |
           ALL_PHP='["8.5","8.4","8.3","8.2","8.1","7.4"]'
-          # MariaDB 10.4 is EOL and not provisionable here (the site is already on
-          # 10.6 and Pantheon does not downgrade), so 10.6 is the only real option.
-          ALL_DB='["10.6"]'
+          # The version number alone identifies the engine: MariaDB ships 10.x/11.x
+          # and MySQL ships 8.x/9.x, so there is no collision. MariaDB 10.4 is EOL
+          # and not provisionable here (the site is already on 10.6 and Pantheon
+          # does not downgrade), so 10.6 is the only MariaDB option.
+          ALL_DB='["10.6","8.4"]'
           if [ -z "$IN_PHP" ] || [ "$IN_PHP" = "all" ]; then
             echo "php=$ALL_PHP" >> "$GITHUB_OUTPUT"
           else
@@ -112,9 +115,11 @@ jobs:
   # Runs the WordPress PHPUnit test suite on the Pantheon environment via Terminus.
   #
   # Each matrix combination maps to a dedicated Pantheon multidev environment named
-  # php{XY}-db{ZZZ} (e.g. php84-db106), pre-configured with the matching PHP and
-  # MariaDB versions via pantheon.yml. This avoids any dynamic version switching at
-  # runtime and gives each combination a clean, isolated database.
+  # php{XY}-db{ZZZ} (e.g. php84-db106, php84-db84), pre-configured with the matching
+  # PHP and database versions via pantheon.yml. This avoids any dynamic version
+  # switching at runtime and gives each combination a clean, isolated database.
+  # Pantheon caps multidev names at 11 characters, which is why the versions are
+  # abbreviated rather than spelled out with the engine name.
   #
   # Flow:
   # 1. Prepare: git clone wordpress-develop on the Pantheon container via Terminus.
@@ -122,12 +127,12 @@ jobs:
   # 3. Report: fetch results from Pantheon, upload to WordPress.org.
   # 4. Cleanup: remove test dir on Pantheon.
   test:
-    name: PHP ${{ matrix.php }} / MariaDB ${{ matrix.db }}
+    name: PHP ${{ matrix.php }} / ${{ startsWith(matrix.db, '10.') && 'MariaDB' || 'MySQL' }} ${{ matrix.db }}
     needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
-    # One concurrent run per PHP+MariaDB combination — each multidev has its own
+    # One concurrent run per PHP+database combination — each multidev has its own
     # database so there's no cross-combination conflict, but we still prevent
     # duplicate runs for the same combination from piling up.
     concurrency:
@@ -155,13 +160,25 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Set matrix-derived environment variables
+        env:
+          MATRIX_PHP: ${{ matrix.php }}
+          MATRIX_DB: ${{ matrix.db }}
         run: |
-          PHP_SHORT=$(echo "${{ matrix.php }}" | tr -d '.')
-          DB_SHORT=$(echo "${{ matrix.db }}" | tr -d '.')
+          PHP_SHORT=$(echo "$MATRIX_PHP" | tr -d '.')
+          DB_SHORT=$(echo "$MATRIX_DB" | tr -d '.')
+          # MariaDB ships 10.x/11.x and MySQL ships 8.x/9.x, so the bare version in
+          # the matrix identifies the engine unambiguously.
+          case "$MATRIX_DB" in
+            10.*|11.*) DB_ENGINE=mariadb ;;
+            *)         DB_ENGINE=mysql ;;
+          esac
           echo "PANTHEON_SITE_ENV=php${PHP_SHORT}-db${DB_SHORT}" >> "$GITHUB_ENV"
-          echo "WPT_PHP_EXECUTABLE=php${{ matrix.php }}" >> "$GITHUB_ENV"
-          # Label reported to WordPress.org so each PHP/MariaDB combination is
-          # distinguishable in the results (e.g. pantheon-php84-db106).
+          echo "WPT_PHP_EXECUTABLE=php${MATRIX_PHP}" >> "$GITHUB_ENV"
+          echo "DB_ENGINE=${DB_ENGINE}" >> "$GITHUB_ENV"
+          # Label reported to WordPress.org so each PHP/database combination is
+          # distinguishable in the results (e.g. pantheon-php84-db106). This is part
+          # of the uniqueness key for a result row upstream, so the db{ZZZ} form is
+          # kept as-is — spelling out the engine here would orphan existing history.
           echo "WPT_LABEL=pantheon-php${PHP_SHORT}-db${DB_SHORT}" >> "$GITHUB_ENV"
 
       - name: Set up PHP
@@ -206,15 +223,16 @@ jobs:
           terminus env:info ${{ secrets.PANTHEON_SITE_NAME }}.${{ env.PANTHEON_SITE_ENV }}
           terminus connection:set ${{ secrets.PANTHEON_SITE_NAME }}.${{ env.PANTHEON_SITE_ENV }} sftp
 
-      # Fail fast if the multidev isn't actually running the PHP/MariaDB versions
+      # Fail fast if the multidev isn't actually running the PHP/database versions
       # this matrix combination expects. Queries the container's live PHP_VERSION
-      # and MariaDB SELECT VERSION() so a drifted pantheon.yml can't silently run
-      # (and report) the wrong environment to WordPress.org.
+      # and SELECT VERSION() so a drifted pantheon.yml can't silently run (and
+      # report) the wrong environment to WordPress.org.
       - name: Verify environment versions
         env:
           PANTHEON_SITE: ${{ secrets.PANTHEON_SITE_NAME }}.${{ env.PANTHEON_SITE_ENV }}
           EXPECT_PHP: ${{ matrix.php }}
           EXPECT_DB: ${{ matrix.db }}
+          EXPECT_DB_ENGINE: ${{ env.DB_ENGINE }}
         run: .github/scripts/verify-environment.sh
 
       - name: Prepare environment

@@ -90,7 +90,7 @@ if ( empty( $sample_b64 ) ) {
 
 $contents = base64_decode( $sample_b64 );
 
-// Environment label reported to WordPress.org so this PHP/MariaDB combination
+// Environment label reported to WordPress.org so this PHP/database combination
 // can be distinguished from others reporting under the same account. addslashes()
 // keeps the value safe when interpolated into the single-quoted string below.
 $wpt_label = addslashes( $runner_vars['WPT_LABEL'] );
@@ -109,10 +109,12 @@ if( extension_loaded( 'gd' ) ) {
 if( extension_loaded( 'imagick' ) ) {
 	\$imagick_info = Imagick::queryFormats();
 }
-// Report the actual database SERVER version (e.g. MariaDB 10.6). 'mysql --version'
-// only reports the client binary, which is uniform across Pantheon containers and
-// would mask the per-environment MariaDB version, so query SELECT VERSION() and
-// fall back to the client string only if the connection fails.
+// Report the actual database SERVER version (e.g. '10.6.18-MariaDB-log' or
+// '8.4.3'). 'mysql --version' only reports the client binary, which is uniform
+// across Pantheon containers and would mask the per-environment database version
+// and engine, so query SELECT VERSION() and fall back to the client string only if
+// the connection fails. The server string self-identifies the engine, which is what
+// distinguishes MariaDB from MySQL rows in the WordPress.org db-version taxonomy.
 \$wpt_db_version = trim( shell_exec( 'mysql --version' ) );
 \$wpt_dbh = @new mysqli( getenv( 'DB_HOST' ), getenv( 'DB_USER' ), getenv( 'DB_PASSWORD' ), getenv( 'DB_NAME' ), (int) getenv( 'DB_PORT' ) );
 if ( \$wpt_dbh && ! \$wpt_dbh->connect_errno ) {

@@ -99,8 +99,9 @@ function setup_runner_env_vars() {
 			// Reporting configuration
 			'WPT_REPORT_API_KEY'         => trim( getenv( 'WPT_REPORT_API_KEY' ) ),
 			// Optional label distinguishing this environment in reported results
-			// (e.g. 'pantheon-php84-db106'). Lets multiple PHP/MariaDB combinations
-			// reporting under the same WordPress.org account be told apart.
+			// (e.g. 'pantheon-php84-db106' or 'pantheon-php84-db84'). Lets multiple
+			// PHP/database combinations reporting under the same WordPress.org
+			// account be told apart.
 			'WPT_LABEL'                  => trim( getenv( 'WPT_LABEL' ) ),
 			// Miscellaneous
 			'WPT_DEBUG'                  => (bool) getenv( 'WPT_DEBUG' ),
