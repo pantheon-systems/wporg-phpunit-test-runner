@@ -192,10 +192,19 @@ jobs:
         with:
           node-version: 20
 
+      # Session caching is disabled deliberately. The action keys its cache on
+      # github.run_id, which is identical across every job in the matrix, and the
+      # restore step matches on that exact key with no restore-keys fallback. So
+      # the cache can only ever hit within a single run — and since all 12 jobs
+      # start simultaneously, none is ever around to benefit from another's save.
+      # The result was 11 "Cache save failed" messages per run (immutable keys,
+      # one winner) for zero cache hits, plus a Node 20 deprecation warning from
+      # the actions/cache@v4 it pulls in. Each job authenticates directly instead.
       - name: Install Terminus
         uses: pantheon-systems/terminus-github-actions@409451ede17f75acac08f42edc823fee6c435057 # v1
         with:
           pantheon-machine-token: ${{ secrets.TERMINUS_MACHINE_TOKEN }}
+          disable-cache: 'true'
 
       - name: Install Terminus plugins
         run: |
