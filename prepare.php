@@ -229,6 +229,30 @@ perform_operations( array(
 ) );
 
 /**
+ * Install the db.php drop-in that reports the real database server version.
+ *
+ * Pantheon's database proxy reports a fixed "5.5.30" in the connection handshake,
+ * which is what wpdb::db_version() reads. Without this, version-gated behaviour in
+ * core misfires against the real server — see drop-ins/db.php for detail.
+ *
+ * WP_CONTENT_DIR is ABSPATH . 'wp-content', and wp-tests-config.php sets
+ * ABSPATH to <test dir>/src/, so the drop-in belongs at src/wp-content/db.php.
+ */
+log_message( 'Installing db.php drop-in' );
+$dropin_local = __DIR__ . '/drop-ins/db.php';
+if ( ! file_exists( $dropin_local ) ) {
+	error_message( 'drop-ins/db.php is missing from the runner checkout.' );
+}
+$dropin_b64  = base64_encode( file_get_contents( $dropin_local ) );
+$dropin_path = $test_dir . '/src/wp-content/db.php';
+$dropin_php  = '@mkdir(dirname(' . var_export( $dropin_path, true ) . '), 0777, true); '
+	. 'file_put_contents(' . var_export( $dropin_path, true ) . ', base64_decode(' . var_export( $dropin_b64, true ) . ')); '
+	. 'echo "db.php drop-in written (" . filesize(' . var_export( $dropin_path, true ) . ') . " bytes)\n";';
+perform_operations( array(
+	'terminus remote:wp ' . $site_env . ' -- eval ' . escapeshellarg( $dropin_php ) . ' --skip-wordpress',
+) );
+
+/**
  * Run Composer on Pantheon to install PHPUnit and its dependencies.
  */
 log_message( 'Running Composer on Pantheon' );
