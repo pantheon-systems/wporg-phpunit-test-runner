@@ -2,7 +2,7 @@ name: WordPress PHPUnit tests
 
 on:
   schedule:
-    # By default, the workflow will run every hour.
+    # By default, the workflow will run every six hours.
     - cron: '0 */6 * * *'
     # Every 3 hours.
     # - cron:  '0 0/3 * * *'
