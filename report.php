@@ -76,12 +76,22 @@ foreach ( array( 'junit.xml', 'env.json', 'testdox.txt' ) as $result_file ) {
  */
 log_message( 'Processing junit.xml' );
 
-if ( ! file_exists( $logs_local . 'junit.xml' ) ) {
-	error_message( 'junit.xml not found — test run did not complete (probable PHP crash). This is a hard failure.' );
+// A missing OR empty (0-byte) junit.xml means the suite didn't finalize its log —
+// the run crashed mid-way (e.g. PHP fatal/OOM/segfault). Catch both here so we fail
+// with a clear message instead of uploading empty results and getting a cryptic
+// "Invalid parameter(s): results" (HTTP 400) from the reporting API.
+if ( ! file_exists( $logs_local . 'junit.xml' ) || 0 === filesize( $logs_local . 'junit.xml' ) ) {
+	error_message( 'junit.xml missing or empty — test run did not complete (probable PHP crash/OOM). This is a hard failure.' );
 }
 
 $xml     = file_get_contents( $logs_local . 'junit.xml' );
 $results = process_junit_xml( $xml );
+
+// process_junit_xml() returns '' for empty or unparseable XML. Uploading that would
+// be rejected as invalid JSON, so treat it as the same hard failure.
+if ( '' === trim( (string) $results ) ) {
+	error_message( 'junit.xml could not be parsed into results — test run likely crashed. This is a hard failure.' );
+}
 
 $env = '';
 if ( file_exists( $logs_local . 'env.json' ) ) {
@@ -98,10 +108,13 @@ if ( $summary_file ) {
 	$summary  = "## WordPress PHPUnit Test Results\n\n";
 	$summary .= '| | |' . "\n" . '|---|---|' . "\n";
 	$summary .= '| **Site** | ' . $PANTHEON_SITE_NAME . '.' . $PANTHEON_SITE_ENV . " |\n";
+	if ( ! empty( $env_data['label'] ) ) {
+		$summary .= '| **Label** | ' . $env_data['label'] . " |\n";
+	}
 	$summary .= '| **Revision** | ' . ( $rev ?: 'unknown' ) . " |\n";
 	$summary .= '| **Commit** | ' . ( $message ?: 'unknown' ) . " |\n";
 	$summary .= '| **PHP** | ' . ( $env_data['php_version'] ?? 'unknown' ) . " |\n";
-	$summary .= '| **MySQL** | ' . ( $env_data['mysql_version'] ?? 'unknown' ) . " |\n";
+	$summary .= '| **Database** | ' . ( $env_data['mysql_version'] ?? 'unknown' ) . " |\n";
 	file_put_contents( $summary_file, $summary, FILE_APPEND );
 }
 

@@ -1,104 +1,185 @@
 name: WordPress PHPUnit tests
 
 on:
-  # The workflow should be run on a schedule using the 'schedule' event trigger.
-  #
-  # For more details on how to configure the schedule event, see https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#onschedule.
-  #
-  # Below are some options for different schedules. Running the tests every hour is recommended,
-  # but every 3-6 hours is also helpful. Times are in UTC.
-   schedule:
-     # By default, the workflow will run every hour.
-     - cron:  '0 * * * *'
-     # Every 3 hours.
-     # - cron:  '0 0/3 * * *'
-     # Every 6 hours.
-     # - cron:  '0 0/6 * * *'
-     # Every 12 hours.
-     # - cron:  '0 0/12 * * *'
-     # Once per day at 00:00.
-     # - cron:  '0 0 * * *'
-     # Every 30 minutes.
-     # - cron:  '0/30 * * * *'
-   push:
+  schedule:
+    # By default, the workflow will run every six hours.
+    - cron: '0 */6 * * *'
+    # Every 3 hours.
+    # - cron:  '0 0/3 * * *'
+    # Every 6 hours.
+    # - cron:  '0 0/6 * * *'
+    # Every 12 hours.
+    # - cron:  '0 0/12 * * *'
+    # Once per day at 00:00.
+    # - cron:  '0 0 * * *'
+  push:
     branches:
       - main
-   workflow_dispatch:
-     inputs:
-       test_group:
-         description: 'Run only tests in this @group. Defaults to full suite.'
-         required: false
-         default: ''
-         type: choice
-         options:
-           - ''
-           - actions
-           - canonical
-           - comment
-           - cron
-           - db
-           - feed
-           - filters
-           - formatting
-           - http
-           - image
-           - l10n
-           - media
-           - ms-site
-           - option
-           - post
-           - query
-           - rest-api
-           - rewrite
-           - taxonomy
-           - themes
-           - upload
-           - user
-           - utf8
-       test_filter:
-         description: 'PHPUnit --filter pattern — matches against class and method names. Examples: Tests_DB, Tests_Options, Tests_Post_Types::test_register. Overrides test_group if set.'
-         required: false
-         default: ''
+  workflow_dispatch:
+    inputs:
+      php_version:
+        description: 'PHP version to test. Defaults to all supported Pantheon PHP versions.'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - '8.5'
+          - '8.4'
+          - '8.3'
+          - '8.2'
+          - '8.1'
+          - '7.4'
+      db_version:
+        description: 'Database version to test. 10.6 is MariaDB, 8.4 is MySQL.'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - '10.6'
+          - '8.4'
+      test_group:
+        description: 'Run only tests in this @group. Defaults to full suite.'
+        required: false
+        default: ''
+        type: choice
+        options:
+          - ''
+          - actions
+          - canonical
+          - comment
+          - cron
+          - db
+          - feed
+          - filters
+          - formatting
+          - http
+          - image
+          - l10n
+          - media
+          - ms-site
+          - option
+          - post
+          - query
+          - rest-api
+          - rewrite
+          - taxonomy
+          - themes
+          - upload
+          - user
+          - utf8
+      test_filter:
+        description: 'PHPUnit --filter pattern — matches against class and method names. Examples: Tests_DB, Tests_Options, Tests_Post_Types::test_register. Overrides test_group if set.'
+        required: false
+        default: ''
 
-# Only one run at a time — prevents simultaneous runs from conflicting
-# over the same wptests_* tables on the shared Pantheon environment.
-concurrency:
-  group: ${{ github.workflow }}
-  cancel-in-progress: true
+permissions:
+  contents: read
 
 jobs:
+  # Resolve the matrix from workflow_dispatch inputs. The `matrix` context is not
+  # available in a job-level `if:`, so filtering has to happen here: this job emits
+  # the PHP and database lists (full set on schedule/push, or a single value when an
+  # input selects one), and the test job builds its matrix from them via fromJson.
+  setup:
+    name: Resolve matrix
+    runs-on: ubuntu-latest
+    outputs:
+      php: ${{ steps.resolve.outputs.php }}
+      db: ${{ steps.resolve.outputs.db }}
+    steps:
+      - name: Resolve PHP and database lists
+        id: resolve
+        env:
+          IN_PHP: ${{ inputs.php_version }}
+          IN_DB: ${{ inputs.db_version }}
+        run: |
+          ALL_PHP='["8.5","8.4","8.3","8.2","8.1","7.4"]'
+          # The version number alone identifies the engine: MariaDB ships 10.x/11.x
+          # and MySQL ships 8.x/9.x, so there is no collision. MariaDB 10.4 is EOL
+          # and not provisionable here (the site is already on 10.6 and Pantheon
+          # does not downgrade), so 10.6 is the only MariaDB option.
+          ALL_DB='["10.6","8.4"]'
+          if [ -z "$IN_PHP" ] || [ "$IN_PHP" = "all" ]; then
+            echo "php=$ALL_PHP" >> "$GITHUB_OUTPUT"
+          else
+            echo "php=[\"$IN_PHP\"]" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -z "$IN_DB" ] || [ "$IN_DB" = "all" ]; then
+            echo "db=$ALL_DB" >> "$GITHUB_OUTPUT"
+          else
+            echo "db=[\"$IN_DB\"]" >> "$GITHUB_OUTPUT"
+          fi
+
   # Runs the WordPress PHPUnit test suite on the Pantheon environment via Terminus.
   #
+  # Each matrix combination maps to a dedicated Pantheon multidev environment named
+  # php{XY}-db{ZZZ} (e.g. php84-db106, php84-db84), pre-configured with the matching
+  # PHP and database versions via pantheon.yml. This avoids any dynamic version
+  # switching at runtime and gives each combination a clean, isolated database.
+  # Pantheon caps multidev names at 11 characters, which is why the versions are
+  # abbreviated rather than spelled out with the engine name.
+  #
   # Flow:
-  # 1. Prepare: git clone wordpress-develop locally, rsync to Pantheon, run composer on Pantheon.
+  # 1. Prepare: git clone wordpress-develop on the Pantheon container via Terminus.
   # 2. Test: run PHPUnit on Pantheon via terminus remote:wp eval --skip-wordpress.
-  # 3. Report: rsync results from Pantheon, upload to WordPress.org.
-  # 4. Cleanup: remove test dir on Pantheon and locally.
+  # 3. Report: fetch results from Pantheon, upload to WordPress.org.
+  # 4. Cleanup: remove test dir on Pantheon.
   test:
-    name: Run Core PHPUnit tests
+    name: PHP ${{ matrix.php }} / ${{ startsWith(matrix.db, '10.') && 'MariaDB' || 'MySQL' }} ${{ matrix.db }}
+    needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 120
+
+    # One concurrent run per PHP+database combination — each multidev has its own
+    # database so there's no cross-combination conflict, but we still prevent
+    # duplicate runs for the same combination from piling up.
+    concurrency:
+      group: ${{ github.workflow }}-php${{ matrix.php }}-db${{ matrix.db }}
+      cancel-in-progress: true
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ${{ fromJson(needs.setup.outputs.php) }}
+        db: ${{ fromJson(needs.setup.outputs.db) }}
 
     env:
       WPT_PREPARE_DIR: ${{ secrets.WPT_PREPARE_DIR }}
       WPT_TEST_DIR: ${{ secrets.WPT_TEST_DIR }}
       WPT_REPORT_API_KEY: ${{ secrets.WPT_REPORT_API_KEY }}
-      # PHP binary on the Pantheon container — use 'php' so it follows whatever
-      # version the environment is configured to run, without hardcoding a version.
-      WPT_PHP_EXECUTABLE: php
-      # SSH key for Terminus SSH operations (remote:wp, remote:composer).
       WPT_SSH_PRIVATE_KEY_BASE64: ${{ secrets.WPT_SSH_PRIVATE_KEY_BASE64 }}
-      # Pantheon-specific variables.
       PANTHEON_SITE_NAME: ${{ secrets.PANTHEON_SITE_NAME }}
-      PANTHEON_SITE_ENV: ${{ secrets.PANTHEON_SITE_ENV }}
       TERMINUS_MACHINE_TOKEN: ${{ secrets.TERMINUS_MACHINE_TOKEN }}
-      # Optional test scoping — set via workflow_dispatch inputs.
       WPT_TEST_GROUP: ${{ inputs.test_group }}
       WPT_TEST_FILTER: ${{ inputs.test_filter }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set matrix-derived environment variables
+        env:
+          MATRIX_PHP: ${{ matrix.php }}
+          MATRIX_DB: ${{ matrix.db }}
+        run: |
+          PHP_SHORT=$(echo "$MATRIX_PHP" | tr -d '.')
+          DB_SHORT=$(echo "$MATRIX_DB" | tr -d '.')
+          # MariaDB ships 10.x/11.x and MySQL ships 8.x/9.x, so the bare version in
+          # the matrix identifies the engine unambiguously.
+          case "$MATRIX_DB" in
+            10.*|11.*) DB_ENGINE=mariadb ;;
+            *)         DB_ENGINE=mysql ;;
+          esac
+          echo "PANTHEON_SITE_ENV=php${PHP_SHORT}-db${DB_SHORT}" >> "$GITHUB_ENV"
+          echo "WPT_PHP_EXECUTABLE=php${MATRIX_PHP}" >> "$GITHUB_ENV"
+          echo "DB_ENGINE=${DB_ENGINE}" >> "$GITHUB_ENV"
+          # Label reported to WordPress.org so each PHP/database combination is
+          # distinguishable in the results (e.g. pantheon-php84-db106). This is part
+          # of the uniqueness key for a result row upstream, so the db{ZZZ} form is
+          # kept as-is — spelling out the engine here would orphan existing history.
+          echo "WPT_LABEL=pantheon-php${PHP_SHORT}-db${DB_SHORT}" >> "$GITHUB_ENV"
 
       - name: Set up PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2.37.2
@@ -111,22 +192,57 @@ jobs:
         with:
           node-version: 20
 
+      # Session caching is disabled deliberately. The action keys its cache on
+      # github.run_id, which is identical across every job in the matrix, and the
+      # restore step matches on that exact key with no restore-keys fallback. So
+      # the cache can only ever hit within a single run — and since all 12 jobs
+      # start simultaneously, none is ever around to benefit from another's save.
+      # The result was 11 "Cache save failed" messages per run (immutable keys,
+      # one winner) for zero cache hits, plus a Node 20 deprecation warning from
+      # the actions/cache@v4 it pulls in. Each job authenticates directly instead.
       - name: Install Terminus
         uses: pantheon-systems/terminus-github-actions@409451ede17f75acac08f42edc823fee6c435057 # v1
         with:
           pantheon-machine-token: ${{ secrets.TERMINUS_MACHINE_TOKEN }}
+          disable-cache: 'true'
 
       - name: Install Terminus plugins
         run: |
           terminus self:plugin:install pantheon-systems/terminus-composer-plugin
 
+      # prepare.php also installs this key, but the Verify step below runs first and
+      # needs 'terminus remote:wp' (SSH) to reach the container — so set it up here.
+      - name: Set up SSH key for Terminus remote commands
+        run: |
+          mkdir -p ~/.ssh
+          echo "$WPT_SSH_PRIVATE_KEY_BASE64" | base64 -d > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          {
+            echo "Host *.drush.in"
+            echo "  HostKeyAlgorithms +ssh-rsa"
+            echo "  PubkeyAcceptedKeyTypes +ssh-rsa"
+            echo "StrictHostKeyChecking no"
+          } >> ~/.ssh/config
+
       - name: Wake and configure Pantheon environment
         run: |
           terminus art wordpress
-          terminus env:wake ${{ secrets.PANTHEON_SITE_NAME }}.${{ secrets.PANTHEON_SITE_ENV }}
+          terminus env:wake ${{ secrets.PANTHEON_SITE_NAME }}.${{ env.PANTHEON_SITE_ENV }}
           terminus site:info ${{ secrets.PANTHEON_SITE_NAME }}
-          terminus env:info ${{ secrets.PANTHEON_SITE_NAME }}.${{ secrets.PANTHEON_SITE_ENV }}
-          terminus connection:set ${{ secrets.PANTHEON_SITE_NAME }}.${{ secrets.PANTHEON_SITE_ENV }} sftp
+          terminus env:info ${{ secrets.PANTHEON_SITE_NAME }}.${{ env.PANTHEON_SITE_ENV }}
+          terminus connection:set ${{ secrets.PANTHEON_SITE_NAME }}.${{ env.PANTHEON_SITE_ENV }} sftp
+
+      # Fail fast if the multidev isn't actually running the PHP/database versions
+      # this matrix combination expects. Queries the container's live PHP_VERSION
+      # and SELECT VERSION() so a drifted pantheon.yml can't silently run (and
+      # report) the wrong environment to WordPress.org.
+      - name: Verify environment versions
+        env:
+          PANTHEON_SITE: ${{ secrets.PANTHEON_SITE_NAME }}.${{ env.PANTHEON_SITE_ENV }}
+          EXPECT_PHP: ${{ matrix.php }}
+          EXPECT_DB: ${{ matrix.db }}
+          EXPECT_DB_ENGINE: ${{ env.DB_ENGINE }}
+        run: .github/scripts/verify-environment.sh
 
       - name: Prepare environment
         run: php prepare.php
@@ -136,10 +252,12 @@ jobs:
         # Prevent the workflow from stopping if there are test failures.
         continue-on-error: true
 
+      # Deliberately NOT continue-on-error: a failed upload means this combination
+      # contributed nothing to the WordPress.org results, which is exactly the
+      # outcome the workflow status should surface. Test failures are still
+      # tolerated by the step above.
       - name: Report the results
         run: php report.php
-        # Prevent the workflow from stopping if the reporting fails.
-        continue-on-error: true
 
       - name: Cleanup
         run: php cleanup.php

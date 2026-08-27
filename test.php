@@ -60,11 +60,43 @@ $testdox_tmp = '/tmp/wpt-testdox.txt';
 // Optional scoping via workflow_dispatch inputs.
 $WPT_TEST_FILTER = trim( getenv( 'WPT_TEST_FILTER' ) );
 $WPT_TEST_GROUP  = trim( getenv( 'WPT_TEST_GROUP' ) );
+
+// Tests excluded from every run because they ABORT the PHP process rather than
+// failing. An abort kills PHPUnit before it writes junit.xml, so a single one of
+// these destroys the whole run's results for that combination — the suite reports
+// nothing at all rather than one failure.
+//
+// test_image_max_bit_depth encodes a 10-bit AVIF fixture, which aborts in libaom
+// on every Pantheon runtime (BUGS-11823). WordPress core already gates this test
+// off for PHP >= 8.3 (@requires PHP < 8.3, core trac #63932), so excluding it here
+// only affects 7.4/8.1/8.2 — precisely the versions that currently report nothing.
+// test_default_script_module_files_exist asserts that built script-module files
+// exist under wp-includes/js/dist/. Those are npm build artifacts, and prepare.php
+// deliberately skips the JS build (PHP unit tests don't need compiled assets).
+// Pantheon containers have no node/npm, so the build cannot run there either.
+// Without this exclusion we publish a failure to WordPress.org that is caused
+// purely by how this runner provisions the suite.
+$wpt_excluded_tests = array(
+	'test_image_max_bit_depth',
+	'test_default_script_module_files_exist',
+);
+
 $scope_txt = '';
 if ( ! empty( $WPT_TEST_FILTER ) ) {
+	// An explicit filter wins outright: PHPUnit accepts only one --filter, and a
+	// caller narrowing to specific tests should get exactly those.
 	$scope_txt = ' --filter ' . escapeshellarg( $WPT_TEST_FILTER );
-} elseif ( ! empty( $WPT_TEST_GROUP ) ) {
-	$scope_txt = ' --group ' . escapeshellarg( $WPT_TEST_GROUP );
+	if ( ! empty( $wpt_excluded_tests ) ) {
+		log_message( 'Note: WPT_TEST_FILTER is set, so the crash-exclusion list is not applied.' );
+	}
+} else {
+	if ( ! empty( $WPT_TEST_GROUP ) ) {
+		$scope_txt = ' --group ' . escapeshellarg( $WPT_TEST_GROUP );
+	}
+	if ( ! empty( $wpt_excluded_tests ) ) {
+		// PHPUnit 9 has no --exclude-filter, so exclude by negative lookahead.
+		$scope_txt .= ' --filter ' . escapeshellarg( '/^(?!.*(?:' . implode( '|', $wpt_excluded_tests ) . ')).*$/' );
+	}
 }
 
 $WPT_PHPUNIT_CMD = trim( getenv( 'WPT_PHPUNIT_CMD' ) );
