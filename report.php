@@ -83,15 +83,14 @@ log_message( 'Processing junit.xml' );
 if ( ! file_exists( $logs_local . 'junit.xml' ) || 0 === filesize( $logs_local . 'junit.xml' ) ) {
 	error_message( 'junit.xml missing or empty — test run did not complete (probable PHP crash/OOM). This is a hard failure.' );
 }
+if ( ! is_readable( $logs_local . 'junit.xml' ) ) {
+	error_message( 'junit.xml exists at ' . $logs_local . 'junit.xml but is not readable. Fix the file permissions and run the report again.' );
+}
 
+// process_junit_xml() aborts on its own for empty, unparseable, or countless XML,
+// so anything it returns here is usable.
 $xml     = file_get_contents( $logs_local . 'junit.xml' );
 $results = process_junit_xml( $xml );
-
-// process_junit_xml() returns '' for empty or unparseable XML. Uploading that would
-// be rejected as invalid JSON, so treat it as the same hard failure.
-if ( '' === trim( (string) $results ) ) {
-	error_message( 'junit.xml could not be parsed into results — test run likely crashed. This is a hard failure.' );
-}
 
 $env = '';
 if ( file_exists( $logs_local . 'env.json' ) ) {
